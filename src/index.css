@@ -1,0 +1,206 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    /* AI Neural Network Background */
+    --neural-bg: 240 15% 6%;
+    --neural-node: 217 91% 60%;
+    --neural-connection: 217 91% 60%;
+    
+    /* Professional AI Color System */
+    --background: 240 15% 8%;
+    --foreground: 220 13% 91%;
+
+    --card: 240 12% 12%;
+    --card-foreground: 220 13% 91%;
+
+    --popover: 240 12% 12%;
+    --popover-foreground: 220 13% 91%;
+
+    /* AI Technology Blue Theme */
+    --primary: 217 91% 60%;
+    --primary-foreground: 240 15% 8%;
+    --primary-hover: 217 91% 65%;
+    --primary-glow: 217 91% 60%;
+
+    --secondary: 240 12% 15%;
+    --secondary-foreground: 220 13% 91%;
+
+    --muted: 240 12% 15%;
+    --muted-foreground: 220 9% 46%;
+
+    --accent: 240 12% 18%;
+    --accent-foreground: 220 13% 91%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 220 13% 91%;
+
+    --border: 240 12% 18%;
+    --input: 240 12% 18%;
+    --ring: 217 91% 60%;
+
+    /* AI Technology Design tokens */
+    --gradient-primary: linear-gradient(135deg, hsl(217 91% 60%), hsl(220 83% 53%));
+    --gradient-secondary: linear-gradient(180deg, hsl(240 12% 12%), hsl(240 12% 15%));
+    --gradient-hero: linear-gradient(135deg, hsl(217 91% 60% / 0.1), hsl(220 83% 53% / 0.05));
+    --gradient-neural: radial-gradient(ellipse at center, hsl(217 91% 60% / 0.05) 0%, transparent 70%);
+    
+    --shadow-ai: 0 4px 20px -2px hsl(217 91% 60% / 0.25);
+    --shadow-card: 0 2px 8px -2px hsl(217 91% 60% / 0.08);
+    --shadow-elevated: 0 8px 32px -4px hsl(217 91% 60% / 0.15);
+    --shadow-neural: 0 0 40px hsl(217 91% 60% / 0.3);
+    
+    --glow-primary: 0 0 32px hsl(217 91% 60% / 0.6);
+    --glow-subtle: 0 0 16px hsl(217 91% 60% / 0.25);
+    --glow-neural: 0 0 80px hsl(217 91% 60% / 0.15);
+    
+    --transition-ai: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-smooth: all 0.2s ease-out;
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 240 12% 10%;
+    --sidebar-foreground: 220 13% 91%;
+    --sidebar-primary: 217 91% 60%;
+    --sidebar-primary-foreground: 240 15% 8%;
+    --sidebar-accent: 240 12% 15%;
+    --sidebar-accent-foreground: 220 13% 91%;
+    --sidebar-border: 240 12% 18%;
+    --sidebar-ring: 217 91% 60%;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    background-image: 
+      radial-gradient(circle at 20% 20%, hsl(217 91% 60% / 0.03) 0%, transparent 50%),
+      radial-gradient(circle at 80% 80%, hsl(217 91% 60% / 0.03) 0%, transparent 50%),
+      radial-gradient(circle at 40% 40%, hsl(217 91% 60% / 0.02) 0%, transparent 50%);
+    background-attachment: fixed;
+    background-size: 100% 100%, 100% 100%, 50% 50%;
+  }
+
+  /* Unified scrollbar styles for all elements */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--border));
+    border-radius: 3px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--accent));
+  }
+
+  /* Apply consistent scrollbar to all main content areas */
+  main, body, html {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+
+  main::-webkit-scrollbar, body::-webkit-scrollbar, html::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  main::-webkit-scrollbar-track, body::-webkit-scrollbar-track, html::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  main::-webkit-scrollbar-thumb, body::-webkit-scrollbar-thumb, html::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--border));
+    border-radius: 3px;
+  }
+
+  main::-webkit-scrollbar-thumb:hover, body::-webkit-scrollbar-thumb:hover, html::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--accent));
+  }
+
+  /* Ensure all scrollable containers use consistent styling */
+  div[class*="overflow"], 
+  div[class*="scroll"] {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+
+  div[class*="overflow"]::-webkit-scrollbar, 
+  div[class*="scroll"]::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  div[class*="overflow"]::-webkit-scrollbar-track, 
+  div[class*="scroll"]::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  div[class*="overflow"]::-webkit-scrollbar-thumb, 
+  div[class*="scroll"]::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--border));
+    border-radius: 3px;
+  }
+
+  div[class*="overflow"]::-webkit-scrollbar-thumb:hover, 
+  div[class*="scroll"]::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--accent));
+  }
+}
