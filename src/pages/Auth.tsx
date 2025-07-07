@@ -1,76 +1,143 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Sparkles, Mail, Smartphone } from "lucide-react";
+import { Sparkles, Mail, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function Auth() {
   const [activeTab, setActiveTab] = useState("login");
-  const [emailOrPhone, setEmailOrPhone] = useState("");
-  const [otp, setOtp] = useState("");
-  const [showOtpInput, setShowOtpInput] = useState(false);
-  const [loginMethod, setLoginMethod] = useState<"email" | "phone">("email");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user, signUp, signIn, signInWithOAuth } = useAuth();
 
-  const handleSendOtp = () => {
-    if (!emailOrPhone) {
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (user) {
+      navigate("/workspace");
+    }
+  }, [user, navigate]);
+
+  const handleLogin = async () => {
+    if (!email || !password) {
       toast({
         title: "Error",
-        description: `Please enter your ${loginMethod === "email" ? "email" : "phone number"}`,
+        description: "Please fill in all fields",
         variant: "destructive",
       });
       return;
     }
-    
-    setShowOtpInput(true);
-    toast({
-      title: "OTP Sent",
-      description: `Verification code sent to your ${loginMethod === "email" ? "email" : "phone number"}`,
-    });
-  };
 
-  const handleVerifyOtp = () => {
-    if (!otp) {
+    setIsLoading(true);
+    try {
+      const { error } = await signIn(email, password);
+      
+      if (error) {
+        toast({
+          title: "Login Failed",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Welcome back!",
+          description: "You've been logged in successfully.",
+        });
+        navigate("/workspace");
+      }
+    } catch (error) {
       toast({
         title: "Error",
-        description: "Please enter the verification code",
+        description: "An unexpected error occurred. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSignUp = async () => {
+    if (!email || !password) {
+      toast({
+        title: "Error",
+        description: "Please fill in all fields",
         variant: "destructive",
       });
       return;
     }
-    
-    // Simulate successful login
-    toast({
-      title: "Success",
-      description: "Login successful! Redirecting to workspace...",
-    });
-    
-    setTimeout(() => {
-      navigate("/workspace");
-    }, 1500);
+
+    if (password.length < 6) {
+      toast({
+        title: "Error",
+        description: "Password must be at least 6 characters long",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const { error } = await signUp(email, password, displayName);
+      
+      if (error) {
+        toast({
+          title: "Sign Up Failed",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Account Created!",
+          description: "Please check your email to verify your account.",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleGoogleSignIn = () => {
-    toast({
-      title: "Google Sign-in",
-      description: "Redirecting to Google authentication...",
-    });
-    
-    // Simulate Google OAuth flow
-    setTimeout(() => {
-      navigate("/workspace");
-    }, 2000);
+  const handleGoogleSignIn = async () => {
+    setIsLoading(true);
+    try {
+      const { error } = await signInWithOAuth('google');
+      
+      if (error) {
+        toast({
+          title: "Google Sign-in Failed",
+          description: error.message,
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to sign in with Google. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const resetForm = () => {
-    setEmailOrPhone("");
-    setOtp("");
-    setShowOtpInput(false);
+    setEmail("");
+    setPassword("");
+    setDisplayName("");
   };
 
   return (
@@ -110,183 +177,134 @@ export default function Auth() {
 
               <TabsContent value="login" className="space-y-4 mt-6">
                 <div className="space-y-4">
-                  {/* Login method selector */}
-                  <div className="flex gap-2">
-                    <Button
-                      variant={loginMethod === "email" ? "ai" : "outline"}
-                      size="sm"
-                      onClick={() => {
-                        setLoginMethod("email");
-                        resetForm();
-                      }}
-                      className="flex-1"
-                    >
-                      <Mail className="h-4 w-4 mr-2" />
-                      Email
-                    </Button>
-                    <Button
-                      variant={loginMethod === "phone" ? "ai" : "outline"}
-                      size="sm"
-                      onClick={() => {
-                        setLoginMethod("phone");
-                        resetForm();
-                      }}
-                      className="flex-1"
-                    >
-                      <Smartphone className="h-4 w-4 mr-2" />
-                      Phone
-                    </Button>
-                  </div>
-
-                  {/* Email/Phone Input */}
+                  {/* Email Input */}
                   <div className="space-y-2">
-                    <Label htmlFor="emailOrPhone">
-                      {loginMethod === "email" ? "Email Address" : "Phone Number"}
-                    </Label>
+                    <Label htmlFor="email">Email Address</Label>
                     <Input
-                      id="emailOrPhone"
-                      type={loginMethod === "email" ? "email" : "tel"}
-                      placeholder={
-                        loginMethod === "email"
-                          ? "Enter your email address"
-                          : "Enter your phone number"
-                      }
-                      value={emailOrPhone}
-                      onChange={(e) => setEmailOrPhone(e.target.value)}
-                      disabled={showOtpInput}
+                      id="email"
+                      type="email"
+                      placeholder="Enter your email address"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
                       className="bg-background border-input"
+                      disabled={isLoading}
                     />
                   </div>
 
-                  {/* OTP Input */}
-                  {showOtpInput && (
-                    <div className="space-y-2 animate-fade-in">
-                      <Label htmlFor="otp">Verification Code</Label>
+                  {/* Password Input */}
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Password</Label>
+                    <div className="relative">
                       <Input
-                        id="otp"
-                        type="text"
-                        placeholder="Enter 6-digit code"
-                        value={otp}
-                        onChange={(e) => setOtp(e.target.value)}
-                        maxLength={6}
-                        className="bg-background border-input"
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Enter your password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="bg-background border-input pr-10"
+                        disabled={isLoading}
                       />
-                      <p className="text-sm text-muted-foreground">
-                        We've sent a verification code to your {loginMethod}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Action Buttons */}
-                  {!showOtpInput ? (
-                    <Button onClick={handleSendOtp} variant="ai" className="w-full font-medium">
-                      Send Verification Code
-                    </Button>
-                  ) : (
-                    <div className="space-y-2">
-                      <Button onClick={handleVerifyOtp} variant="ai" className="w-full font-medium">
-                        Verify & Continue
-                      </Button>
-                      <Button 
-                        onClick={resetForm} 
-                        variant="ghost" 
-                        className="w-full text-sm"
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        onClick={() => setShowPassword(!showPassword)}
+                        disabled={isLoading}
                       >
-                        Use different {loginMethod === "email" ? "email" : "phone number"}
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
                       </Button>
                     </div>
-                  )}
+                  </div>
+
+                  {/* Login Button */}
+                  <Button 
+                    onClick={handleLogin} 
+                    variant="ai" 
+                    className="w-full font-medium"
+                    disabled={isLoading}
+                  >
+                    {isLoading ? "Signing in..." : "Sign In"}
+                  </Button>
                 </div>
               </TabsContent>
 
               <TabsContent value="signup" className="space-y-4 mt-6">
                 <div className="space-y-4">
-                  {/* Signup method selector */}
-                  <div className="flex gap-2">
-                    <Button
-                      variant={loginMethod === "email" ? "ai" : "outline"}
-                      size="sm"
-                      onClick={() => {
-                        setLoginMethod("email");
-                        resetForm();
-                      }}
-                      className="flex-1"
-                    >
-                      <Mail className="h-4 w-4 mr-2" />
-                      Email
-                    </Button>
-                    <Button
-                      variant={loginMethod === "phone" ? "ai" : "outline"}
-                      size="sm"
-                      onClick={() => {
-                        setLoginMethod("phone");
-                        resetForm();
-                      }}
-                      className="flex-1"
-                    >
-                      <Smartphone className="h-4 w-4 mr-2" />
-                      Phone
-                    </Button>
-                  </div>
-
-                  {/* Email/Phone Input */}
+                  {/* Display Name Input */}
                   <div className="space-y-2">
-                    <Label htmlFor="signupEmailOrPhone">
-                      {loginMethod === "email" ? "Email Address" : "Phone Number"}
-                    </Label>
+                    <Label htmlFor="displayName">Display Name (Optional)</Label>
                     <Input
-                      id="signupEmailOrPhone"
-                      type={loginMethod === "email" ? "email" : "tel"}
-                      placeholder={
-                        loginMethod === "email"
-                          ? "Enter your email address"
-                          : "Enter your phone number"
-                      }
-                      value={emailOrPhone}
-                      onChange={(e) => setEmailOrPhone(e.target.value)}
-                      disabled={showOtpInput}
+                      id="displayName"
+                      type="text"
+                      placeholder="Enter your display name"
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
                       className="bg-background border-input"
+                      disabled={isLoading}
                     />
                   </div>
 
-                  {/* OTP Input for signup */}
-                  {showOtpInput && (
-                    <div className="space-y-2 animate-fade-in">
-                      <Label htmlFor="signupOtp">Verification Code</Label>
-                      <Input
-                        id="signupOtp"
-                        type="text"
-                        placeholder="Enter 6-digit code"
-                        value={otp}
-                        onChange={(e) => setOtp(e.target.value)}
-                        maxLength={6}
-                        className="bg-background border-input"
-                      />
-                      <p className="text-sm text-muted-foreground">
-                        We've sent a verification code to your {loginMethod}
-                      </p>
-                    </div>
-                  )}
+                  {/* Email Input */}
+                  <div className="space-y-2">
+                    <Label htmlFor="signupEmail">Email Address</Label>
+                    <Input
+                      id="signupEmail"
+                      type="email"
+                      placeholder="Enter your email address"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="bg-background border-input"
+                      disabled={isLoading}
+                    />
+                  </div>
 
-                  {/* Action Buttons for signup */}
-                  {!showOtpInput ? (
-                    <Button onClick={handleSendOtp} variant="ai" className="w-full font-medium">
-                      Create Account
-                    </Button>
-                  ) : (
-                    <div className="space-y-2">
-                      <Button onClick={handleVerifyOtp} variant="ai" className="w-full font-medium">
-                        Verify & Create Account
-                      </Button>
-                      <Button 
-                        onClick={resetForm} 
-                        variant="ghost" 
-                        className="w-full text-sm"
+                  {/* Password Input */}
+                  <div className="space-y-2">
+                    <Label htmlFor="signupPassword">Password</Label>
+                    <div className="relative">
+                      <Input
+                        id="signupPassword"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Create a strong password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="bg-background border-input pr-10"
+                        disabled={isLoading}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        onClick={() => setShowPassword(!showPassword)}
+                        disabled={isLoading}
                       >
-                        Use different {loginMethod === "email" ? "email" : "phone number"}
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
                       </Button>
                     </div>
-                  )}
+                    <p className="text-xs text-muted-foreground">
+                      Password must be at least 6 characters long
+                    </p>
+                  </div>
+
+                  {/* Sign Up Button */}
+                  <Button 
+                    onClick={handleSignUp} 
+                    variant="ai" 
+                    className="w-full font-medium"
+                    disabled={isLoading}
+                  >
+                    {isLoading ? "Creating account..." : "Create Account"}
+                  </Button>
                 </div>
               </TabsContent>
             </Tabs>

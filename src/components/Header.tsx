@@ -1,6 +1,6 @@
 
 import { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -13,6 +13,8 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Sparkles, User, Settings, LogOut, Bell, CreditCard, Crown, ArrowLeft } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
 
 interface HeaderProps {
   onSidebarToggle?: () => void;
@@ -28,6 +30,26 @@ export function Header({ onSidebarToggle, showSidebarToggle = false, showBackBut
   const maxUsage = 1000;
   const usagePercentage = (usageCount / maxUsage) * 100;
   const [userPlan] = useState("Pro");
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+
+  const handleSignOut = async () => {
+    const { error } = await signOut();
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Failed to sign out. Please try again.",
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Signed out",
+        description: "You have been signed out successfully.",
+      });
+      navigate("/");
+    }
+  };
 
   const getPlanBadgeColor = () => {
     switch(userPlan) {
@@ -140,9 +162,9 @@ export function Header({ onSidebarToggle, showSidebarToggle = false, showBackBut
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="relative h-8 w-8 sm:h-10 sm:w-10 rounded-full border-2 border-border hover:border-primary/50 hover:shadow-glow-subtle transition-all duration-300">
                 <Avatar className="h-6 w-6 sm:h-8 sm:w-8">
-                  <AvatarImage src="/avatars/01.png" alt="User" />
+                  <AvatarImage src={user?.profile?.avatar_url} alt={user?.profile?.display_name || "User"} />
                   <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-semibold text-sm">
-                    JD
+                    {user?.profile?.display_name?.charAt(0) || user?.email?.charAt(0) || "U"}
                   </AvatarFallback>
                 </Avatar>
               </Button>
@@ -155,14 +177,14 @@ export function Header({ onSidebarToggle, showSidebarToggle = false, showBackBut
               <div className="px-3 py-3">
                 <div className="flex items-center gap-3">
                   <Avatar className="h-12 w-12">
-                    <AvatarImage src="/avatars/01.png" alt="User" />
+                    <AvatarImage src={user?.profile?.avatar_url} alt={user?.profile?.display_name || "User"} />
                     <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-semibold text-lg">
-                      JD
+                      {user?.profile?.display_name?.charAt(0) || user?.email?.charAt(0) || "U"}
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    <p className="font-semibold text-foreground">John Doe</p>
-                    <p className="text-sm text-muted-foreground">john.doe@example.com</p>
+                    <p className="font-semibold text-foreground">{user?.profile?.display_name || "User"}</p>
+                    <p className="text-sm text-muted-foreground">{user?.email}</p>
                     <Badge className={`${getPlanBadgeColor()} text-white text-xs mt-1`}>
                       {userPlan} Plan
                     </Badge>
@@ -189,7 +211,7 @@ export function Header({ onSidebarToggle, showSidebarToggle = false, showBackBut
                 </DropdownMenuItem>
               </Link>
               <DropdownMenuSeparator className="my-2 bg-border" />
-              <DropdownMenuItem className="hover:bg-red-500/10 cursor-pointer text-red-400 rounded-xl px-3 py-2.5 transition-colors">
+              <DropdownMenuItem onClick={handleSignOut} className="hover:bg-red-500/10 cursor-pointer text-red-400 rounded-xl px-3 py-2.5 transition-colors">
                 <LogOut className="mr-3 h-4 w-4" />
                 Sign Out
               </DropdownMenuItem>
