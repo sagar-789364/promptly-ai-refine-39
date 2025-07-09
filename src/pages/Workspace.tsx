@@ -11,6 +11,8 @@ import { Header } from "@/components/Header";
 import { Sidebar } from "@/components/Sidebar";
 import { AttachmentUpload } from "@/components/AttachmentUpload";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
+import { DatabaseService } from "@/lib/database";
 import { 
   Copy, 
   Save, 
@@ -35,6 +37,7 @@ interface AttachmentFile {
 }
 
 export default function Workspace() {
+  const { user } = useAuth();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [initialPrompt, setInitialPrompt] = useState("");
   const [refinedPrompt, setRefinedPrompt] = useState("");
@@ -47,6 +50,8 @@ export default function Workspace() {
   }>>([]);
   const [chatInput, setChatInput] = useState("");
   const [isRefining, setIsRefining] = useState(false);
+  const [currentPromptId, setCurrentPromptId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   
   // Check for prompt parameter in URL
   useEffect(() => {
@@ -75,36 +80,80 @@ export default function Workspace() {
       return;
     }
 
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "Please log in to refine prompts",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsRefining(true);
     
-    // Enhanced refinement considering attachments
-    setTimeout(() => {
-      let attachmentContext = "";
-      if (attachments.length > 0) {
-        const fileTypes = attachments.map(att => {
-          if (att.type.startsWith('image/')) return 'image';
-          if (att.type === 'application/pdf') return 'PDF document';
-          if (att.type.includes('document') || att.type.includes('word')) return 'Word document';
-          if (att.type.includes('excel') || att.type.includes('spreadsheet')) return 'Excel spreadsheet';
-          return 'text file';
-        });
-        attachmentContext = `\n\nAttached files: ${fileTypes.join(', ')} - Please analyze and incorporate insights from these ${attachments.length} file(s) into your response.`;
+    try {
+      // Create the prompt in database first
+      const promptData = {
+        user_id: user.id,
+        initial_prompt: initialPrompt,
+        target_model: targetModel || null,
+        tone: tone || null,
+        persona: persona || null,
+        output_format: outputFormat || null,
+        is_saved: false,
+        is_favorited: false
+      };
+
+      const { data: prompt, error } = await DatabaseService.createPrompt(promptData);
+      
+      if (error) {
+        throw new Error(error.message);
       }
 
-      // Get user's profession from profile (defaulting to generic if not set)
-      const userProfession = "Software Engineer"; // This would come from user's profile
-      const selectedPersona = persona || `Act as ${userProfession}`;
-      
-      const mockRefinedPrompt = `Enhanced version of: "${initialPrompt}"${attachmentContext}\n\nRefined for ${targetModel || 'optimal AI model'} with ${tone || 'balanced'} tone, ${selectedPersona}, formatted as ${outputFormat || 'structured response'}.\n\nThis refined prompt includes:\n- Better context and clarity leveraging your profession as ${userProfession}\n- Specific instructions for improved output quality\n- Consideration of attached files and their content (${attachments.length} files analyzed)\n- Optimized structure for the selected AI model\n- Enhanced prompting techniques for better results\n- Personalized approach based on your professional background`;
-      
-      setRefinedPrompt(mockRefinedPrompt);
+      setCurrentPromptId(prompt.id);
+
+      // Enhanced refinement considering attachments
+      setTimeout(async () => {
+        let attachmentContext = "";
+        if (attachments.length > 0) {
+          const fileTypes = attachments.map(att => {
+            if (att.type.startsWith('image/')) return 'image';
+            if (att.type === 'application/pdf') return 'PDF document';
+            if (att.type.includes('document') || att.type.includes('word')) return 'Word document';
+            if (att.type.includes('excel') || att.type.includes('spreadsheet')) return 'Excel spreadsheet';
+            return 'text file';
+          });
+          attachmentContext = `\n\nAttached files: ${fileTypes.join(', ')} - Please analyze and incorporate insights from these ${attachments.length} file(s) into your response.`;
+        }
+
+        const selectedPersona = persona || `Act as a professional`;
+        
+        const mockRefinedPrompt = `Enhanced version of: "${initialPrompt}"${attachmentContext}\n\nRefined for ${targetModel || 'optimal AI model'} with ${tone || 'balanced'} tone, ${selectedPersona}, formatted as ${outputFormat || 'structured response'}.\n\nThis refined prompt includes:\n- Better context and clarity\n- Specific instructions for improved output quality\n- Consideration of attached files and their content (${attachments.length} files analyzed)\n- Optimized structure for the selected AI model\n- Enhanced prompting techniques for better results\n- Personalized approach based on your preferences`;
+        
+        setRefinedPrompt(mockRefinedPrompt);
+        
+        // Update the prompt in database with refined version
+        if (prompt?.id) {
+          await DatabaseService.updatePrompt(prompt.id, {
+            refined_prompt: mockRefinedPrompt
+          });
+        }
+        
+        setIsRefining(false);
+        
+        toast({
+          title: "Prompt Refined",
+          description: `Your prompt has been enhanced${attachments.length > 0 ? ` with ${attachments.length} attachment(s) considered` : ''}!`,
+        });
+      }, 2000);
+    } catch (error) {
       setIsRefining(false);
-      
       toast({
-        title: "Prompt Refined",
-        description: `Your prompt has been enhanced${attachments.length > 0 ? ` with ${attachments.length} attachment(s) considered` : ''}!`,
+        title: "Error",
+        description: "Failed to refine prompt. Please try again.",
+        variant: "destructive",
       });
-    }, 2000);
+    }
   };
 
   const handleCopyPrompt = () => {
@@ -115,11 +164,37 @@ export default function Workspace() {
     });
   };
 
-  const handleSavePrompt = () => {
-    toast({
-      title: "Saved",
-      description: "Prompt saved to your history",
-    });
+  const handleSavePrompt = async () => {
+    if (!currentPromptId || !user) {
+      toast({
+        title: "Error",
+        description: "No prompt to save",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSaving(true);
+    
+    try {
+      await DatabaseService.updatePrompt(currentPromptId, {
+        is_saved: true,
+        title: initialPrompt.substring(0, 50) + (initialPrompt.length > 50 ? "..." : "")
+      });
+      
+      toast({
+        title: "Saved",
+        description: "Prompt saved to your history",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to save prompt",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleSendChatMessage = () => {

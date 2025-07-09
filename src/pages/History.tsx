@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Header } from "@/components/Header";
 import { Sidebar } from "@/components/Sidebar";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
+import { DatabaseService } from "@/lib/database";
 import { 
   Search, 
   Filter, 
@@ -78,6 +80,7 @@ const promptEngineeringTechniques = [
 ];
 
 export default function History() {
+  const { user } = useAuth();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedModel, setSelectedModel] = useState("");
@@ -86,8 +89,57 @@ export default function History() {
   const [selectedFeedback, setSelectedFeedback] = useState("");
   const [activeTab, setActiveTab] = useState("all");
   const [loading, setLoading] = useState(false);
+  const [prompts, setPrompts] = useState<any[]>([]);
+  const [analytics, setAnalytics] = useState({
+    totalPrompts: 0,
+    savedPrompts: 0,
+    favoritedPrompts: 0,
+    thisWeekCount: 0,
+    avgConfidenceScore: 0
+  });
   
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (user) {
+      loadPrompts();
+    }
+  }, [user]);
+
+  const loadPrompts = async () => {
+    if (!user) return;
+    
+    setLoading(true);
+    try {
+      const { data, error } = await DatabaseService.getUserPrompts(user.id);
+      
+      if (error) {
+        throw new Error(error.message);
+      }
+      
+      setPrompts(data || []);
+      setAnalytics({
+        totalPrompts: data?.length || 0,
+        savedPrompts: data?.filter(p => p.is_saved).length || 0,
+        favoritedPrompts: data?.filter(p => p.is_favorited).length || 0,
+        thisWeekCount: data?.filter(p => {
+          const createdAt = new Date(p.created_at);
+          const oneWeekAgo = new Date();
+          oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+          return createdAt > oneWeekAgo;
+        }).length || 0,
+        avgConfidenceScore: 85 // Mock value for now
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to load prompt history",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Enhanced mock data with prompt engineering techniques and attachments
   const promptHistory: PromptHistoryItem[] = [
@@ -175,32 +227,24 @@ export default function History() {
     }
   ];
 
-  const analytics = {
-    totalPrompts: 156,
-    topModel: "GPT-4",
-    averageRating: 4.2,
-    thisWeekCount: 23,
-    topTechnique: "Chain-of-Thought",
-    avgConfidenceScore: 91.2
-  };
 
-  const filteredPrompts = promptHistory.filter(prompt => {
+  const filteredPrompts = prompts.filter(prompt => {
     const matchesSearch = searchQuery === "" || 
-      prompt.originalPrompt.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      prompt.refinedPrompt.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      prompt.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
+      prompt.initial_prompt.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (prompt.refined_prompt && prompt.refined_prompt.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (prompt.title && prompt.title.toLowerCase().includes(searchQuery.toLowerCase()));
     
-    const matchesModel = selectedModel === "" || prompt.model === selectedModel;
-    const matchesTechnique = selectedTechnique === "" || prompt.technique === selectedTechnique;
+    const matchesModel = selectedModel === "" || prompt.target_model === selectedModel;
+    const matchesTechnique = selectedTechnique === "" || true; // No technique field in DB yet
     const matchesFeedback = selectedFeedback === "" || 
-      (selectedFeedback === "positive" && prompt.rating === "up") ||
-      (selectedFeedback === "negative" && prompt.rating === "down") ||
-      (selectedFeedback === "neutral" && prompt.rating === null);
+      (selectedFeedback === "positive" && prompt.is_favorited) ||
+      (selectedFeedback === "negative" && false) ||
+      (selectedFeedback === "neutral" && !prompt.is_favorited);
     
     const matchesTab = activeTab === "all" || 
-      (activeTab === "starred" && prompt.starred) ||
-      (activeTab === "multimodal" && prompt.inputTypes.length > 1) ||
-      (activeTab === "high-performance" && prompt.confidenceScore >= 90);
+      (activeTab === "starred" && prompt.is_favorited) ||
+      (activeTab === "multimodal" && false) || // No attachment info in current query
+      (activeTab === "high-performance" && prompt.refined_prompt);
 
     return matchesSearch && matchesModel && matchesTechnique && matchesFeedback && matchesTab;
   });
@@ -213,11 +257,33 @@ export default function History() {
     });
   };
 
-  const handleStarPrompt = (id: number) => {
-    toast({
-      title: "Starred",
-      description: "Prompt added to favorites",
-    });
+  const handleStarPrompt = async (id: string) => {
+    if (!user) return;
+    
+    try {
+      const prompt = prompts.find(p => p.id === id);
+      if (!prompt) return;
+      
+      await DatabaseService.updatePrompt(id, {
+        is_favorited: !prompt.is_favorited
+      });
+      
+      // Update local state
+      setPrompts(prompts.map(p => 
+        p.id === id ? { ...p, is_favorited: !p.is_favorited } : p
+      ));
+      
+      toast({
+        title: prompt.is_favorited ? "Removed from favorites" : "Added to favorites",
+        description: prompt.is_favorited ? "Prompt removed from favorites" : "Prompt added to favorites",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update favorite status",
+        variant: "destructive",
+      });
+    }
   };
 
   const getTechniqueColor = (technique: string) => {
@@ -394,7 +460,7 @@ export default function History() {
 
                   <Tabs value={activeTab} onValueChange={setActiveTab}>
                     <TabsList className="bg-white/70 backdrop-blur-sm">
-                      <TabsTrigger value="all">All ({promptHistory.length})</TabsTrigger>
+                      <TabsTrigger value="all">All ({prompts.length})</TabsTrigger>
                       <TabsTrigger value="starred">Starred</TabsTrigger>
                       <TabsTrigger value="multimodal">Multimodal</TabsTrigger>
                       <TabsTrigger value="high-performance">High Performance</TabsTrigger>
@@ -404,7 +470,14 @@ export default function History() {
 
                 {/* Prompt List */}
                 <div className="space-y-4">
-                  {filteredPrompts.length === 0 ? (
+                  {loading ? (
+                    <Card className="bg-white/70 backdrop-blur-sm border border-white/50">
+                      <CardContent className="p-12 text-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                        <p className="text-muted-foreground">Loading prompts...</p>
+                      </CardContent>
+                    </Card>
+                  ) : filteredPrompts.length === 0 ? (
                     <Card className="bg-white/70 backdrop-blur-sm border border-white/50">
                       <CardContent className="p-12 text-center">
                         <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
@@ -412,7 +485,10 @@ export default function History() {
                         </div>
                         <h3 className="text-lg font-semibold mb-2">No prompts found</h3>
                         <p className="text-gray-600">
-                          Try adjusting your search or filters to find what you're looking for.
+                          {prompts.length === 0 
+                            ? "You haven't created any prompts yet. Start by creating your first prompt!" 
+                            : "Try adjusting your search or filters to find what you're looking for."
+                          }
                         </p>
                       </CardContent>
                     </Card>
@@ -421,41 +497,37 @@ export default function History() {
                       <Card key={prompt.id} className="bg-white/70 backdrop-blur-sm border border-white/50 hover:bg-white/80 transition-all duration-300 hover:shadow-xl">
                         <CardContent className="p-6">
                           <div className="space-y-4">
-                            {/* Header with technique and metrics */}
+                            {/* Header with basic info */}
                             <div className="flex items-start justify-between">
                               <div className="flex-1">
                                 <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                  <Badge variant="outline" className={`bg-${getTechniqueColor(prompt.technique)}-100 text-${getTechniqueColor(prompt.technique)}-800 border-${getTechniqueColor(prompt.technique)}-200`}>
-                                    <Brain className="w-3 h-3 mr-1" />
-                                    {prompt.technique}
-                                  </Badge>
-                                  <Badge variant="outline">
-                                    {prompt.model}
-                                  </Badge>
-                                  <Badge variant="outline" className="bg-green-100 text-green-800">
-                                    {prompt.confidenceScore}% confidence
-                                  </Badge>
-                                  <Badge variant="outline" className="bg-blue-100 text-blue-800">
-                                    <Clock className="w-3 h-3 mr-1" />
-                                    {prompt.processingTime}s
-                                  </Badge>
+                                  {prompt.target_model && (
+                                    <Badge variant="outline">
+                                      {prompt.target_model}
+                                    </Badge>
+                                  )}
+                                  {prompt.tone && (
+                                    <Badge variant="outline">
+                                      {prompt.tone}
+                                    </Badge>
+                                  )}
+                                  {prompt.persona && (
+                                    <Badge variant="outline">
+                                      {prompt.persona}
+                                    </Badge>
+                                  )}
+                                  {prompt.is_saved && (
+                                    <Badge variant="secondary">
+                                      Saved
+                                    </Badge>
+                                  )}
                                   <span className="text-sm text-gray-500">
-                                    {new Date(prompt.date).toLocaleDateString()}
+                                    {new Date(prompt.created_at).toLocaleDateString()}
                                   </span>
                                 </div>
-                                {/* Input types */}
-                                <div className="flex items-center gap-2 mb-3">
-                                  <span className="text-xs font-medium text-gray-600">Input Types:</span>
-                                  {prompt.inputTypes.map(type => {
-                                    const IconComponent = getInputTypeIcon(type);
-                                    return (
-                                      <Badge key={type} variant="secondary" className="text-xs">
-                                        <IconComponent className="w-3 h-3 mr-1" />
-                                        {type}
-                                      </Badge>
-                                    );
-                                  })}
-                                </div>
+                                {prompt.title && (
+                                  <h3 className="font-medium text-lg mb-2">{prompt.title}</h3>
+                                )}
                               </div>
                               <div className="flex items-center gap-1">
                                 <Button
@@ -464,61 +536,34 @@ export default function History() {
                                   onClick={() => handleStarPrompt(prompt.id)}
                                   className={cn(
                                     "h-8 w-8",
-                                    prompt.starred && "text-yellow-500"
+                                    prompt.is_favorited && "text-yellow-500"
                                   )}
                                 >
-                                  <Star className={cn("h-4 w-4", prompt.starred && "fill-current")} />
+                                  <Star className={cn("h-4 w-4", prompt.is_favorited && "fill-current")} />
                                 </Button>
                               </div>
                             </div>
-
-                            {/* Attachments */}
-                            {prompt.attachments && prompt.attachments.length > 0 && (
-                              <div className="bg-gray-50 rounded-lg p-3">
-                                <h5 className="text-sm font-medium text-gray-700 mb-2">Attachments:</h5>
-                                <div className="flex flex-wrap gap-2">
-                                  {prompt.attachments.map((attachment, index) => {
-                                    const IconComponent = getInputTypeIcon(attachment.type);
-                                    return (
-                                      <div key={index} className="flex items-center gap-2 bg-white rounded px-2 py-1 text-xs">
-                                        <IconComponent className="w-3 h-3" />
-                                        <span>{attachment.name}</span>
-                                        <span className="text-gray-500">({attachment.size})</span>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            )}
 
                             {/* Original Prompt */}
                             <div>
                               <h4 className="font-medium text-sm text-gray-600 mb-1">Original Prompt:</h4>
                               <p className="text-sm bg-gray-50 p-3 rounded-lg">
-                                {prompt.originalPrompt}
+                                {prompt.initial_prompt}
                               </p>
                             </div>
 
                             {/* Refined Prompt */}
-                            <div>
-                              <h4 className="font-medium text-sm text-gray-600 mb-1">AI-Refined Prompt:</h4>
-                              <p className="text-sm bg-gradient-to-br from-indigo-50 to-purple-50 p-3 rounded-lg border border-indigo-200">
-                                {prompt.refinedPrompt.length > 300 
-                                  ? `${prompt.refinedPrompt.substring(0, 300)}...` 
-                                  : prompt.refinedPrompt
-                                }
-                              </p>
-                            </div>
-
-                            {/* Tags */}
-                            <div className="flex flex-wrap gap-1">
-                              {prompt.tags.map((tag) => (
-                                <Badge key={tag} variant="secondary" className="text-xs">
-                                  <Tag className="w-3 h-3 mr-1" />
-                                  {tag}
-                                </Badge>
-                              ))}
-                            </div>
+                            {prompt.refined_prompt && (
+                              <div>
+                                <h4 className="font-medium text-sm text-gray-600 mb-1">AI-Refined Prompt:</h4>
+                                <p className="text-sm bg-gradient-to-br from-indigo-50 to-purple-50 p-3 rounded-lg border border-indigo-200">
+                                  {prompt.refined_prompt.length > 300 
+                                    ? `${prompt.refined_prompt.substring(0, 300)}...` 
+                                    : prompt.refined_prompt
+                                  }
+                                </p>
+                              </div>
+                            )}
 
                             {/* Actions */}
                             <div className="flex items-center justify-between pt-2 border-t border-gray-200">
@@ -526,7 +571,7 @@ export default function History() {
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={() => handleCopyPrompt(prompt.refinedPrompt)}
+                                  onClick={() => handleCopyPrompt(prompt.refined_prompt || prompt.initial_prompt)}
                                 >
                                   <Copy className="mr-2 h-3 w-3" />
                                   Copy
@@ -536,7 +581,7 @@ export default function History() {
                                   size="sm"
                                   onClick={() => {
                                     // Navigate to workspace with this prompt
-                                    window.location.href = `/workspace?prompt=${encodeURIComponent(prompt.refinedPrompt)}`;
+                                    window.location.href = `/workspace?prompt=${encodeURIComponent(prompt.refined_prompt || prompt.initial_prompt)}`;
                                   }}
                                 >
                                   <RefreshCw className="mr-2 h-3 w-3" />
@@ -546,30 +591,8 @@ export default function History() {
 
                               <div className="flex items-center gap-4">
                                 <span className="text-xs text-gray-500">
-                                  Used {prompt.usageCount} times
+                                  {new Date(prompt.updated_at).toLocaleDateString()}
                                 </span>
-                                <div className="flex items-center gap-1">
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className={cn(
-                                      "h-6 w-6",
-                                      prompt.rating === "up" && "text-green-600"
-                                    )}
-                                  >
-                                    <ThumbsUp className="h-3 w-3" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className={cn(
-                                      "h-6 w-6",
-                                      prompt.rating === "down" && "text-red-600"
-                                    )}
-                                  >
-                                    <ThumbsDown className="h-3 w-3" />
-                                  </Button>
-                                </div>
                               </div>
                             </div>
                           </div>

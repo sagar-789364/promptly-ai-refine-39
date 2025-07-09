@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,86 +7,97 @@ import { Badge } from "@/components/ui/badge";
 import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
 import { cn } from "@/lib/utils";
+import { DatabaseService } from "@/lib/database";
+import { useToast } from "@/hooks/use-toast";
 import { Search, Copy, Star, Sparkles, FileText, Code, MessageSquare, Briefcase } from "lucide-react";
 
 export default function Templates() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
 
-  const templates = [
-    {
-      id: 1,
-      title: "Code Review Assistant",
-      description: "Generate comprehensive code reviews with suggestions for improvement",
-      category: "Development",
-      icon: Code,
-      prompt: "Please review the following code and provide detailed feedback on code quality, potential bugs, performance optimizations, and best practices:",
-      tags: ["code", "review", "development"],
-      usage: 1247
-    },
-    {
-      id: 2,
-      title: "Marketing Copy Generator",
-      description: "Create compelling marketing copy for products and services",
-      category: "Marketing",
-      icon: Sparkles,
-      prompt: "Create engaging marketing copy for [PRODUCT/SERVICE]. Focus on benefits, emotional appeal, and call-to-action. Target audience: [AUDIENCE]",
-      tags: ["marketing", "copywriting", "sales"],
-      usage: 892
-    },
-    {
-      id: 3,
-      title: "Technical Documentation",
-      description: "Generate clear and comprehensive technical documentation",
-      category: "Documentation",
-      icon: FileText,
-      prompt: "Create detailed technical documentation for [FEATURE/API/SYSTEM]. Include overview, implementation details, examples, and troubleshooting guide:",
-      tags: ["documentation", "technical", "guide"],
-      usage: 634
-    },
-    {
-      id: 4,
-      title: "Customer Support Response",
-      description: "Craft professional and helpful customer support responses",
-      category: "Support",
-      icon: MessageSquare,
-      prompt: "Generate a professional customer support response for the following inquiry. Be empathetic, helpful, and provide clear next steps:",
-      tags: ["support", "customer", "communication"],
-      usage: 445
-    },
-    {
-      id: 5,
-      title: "Business Plan Generator",
-      description: "Create comprehensive business plan sections",
-      category: "Business",
-      icon: Briefcase,
-      prompt: "Generate a detailed business plan section for [SECTION TYPE]. Include market analysis, financial projections, and strategic recommendations for [BUSINESS TYPE]:",
-      tags: ["business", "planning", "strategy"],
-      usage: 321
-    },
-    {
-      id: 6,
-      title: "Creative Writing Assistant",
-      description: "Help with creative writing projects and storytelling",
-      category: "Creative",
-      icon: Star,
-      prompt: "Help me develop a creative story with the following elements: [GENRE], [SETTING], [CHARACTERS]. Focus on engaging narrative and character development:",
-      tags: ["creative", "writing", "storytelling"],
-      usage: 267
+  useEffect(() => {
+    loadTemplates();
+  }, []);
+
+  const loadTemplates = async () => {
+    try {
+      const { data, error } = await DatabaseService.getPromptTemplates({
+        public_only: true,
+        search: searchTerm || undefined,
+        category: selectedCategory || undefined
+      });
+      
+      if (error) {
+        throw new Error(error.message);
+      }
+      
+      setTemplates(data || []);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to load templates",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
+
+  useEffect(() => {
+    const debounceTimer = setTimeout(loadTemplates, 300);
+    return () => clearTimeout(debounceTimer);
+  }, [searchTerm, selectedCategory]);
 
   const filteredTemplates = templates.filter(template =>
     template.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    template.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    template.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
+    template.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    template.tags?.some((tag: string) => tag.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const categories = [...new Set(templates.map(t => t.category))];
 
-  const copyToClipboard = (prompt: string) => {
-    navigator.clipboard.writeText(prompt);
-    // You could add a toast notification here
+  const copyToClipboard = async (prompt: string, templateId: string) => {
+    try {
+      await navigator.clipboard.writeText(prompt);
+      
+      // Increment usage count
+      await DatabaseService.incrementTemplateUsage(templateId);
+      
+      toast({
+        title: "Copied",
+        description: "Template copied to clipboard",
+      });
+      
+      // Refresh templates to update usage count
+      loadTemplates();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to copy template",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const useTemplate = (template: any) => {
+    const url = `/workspace?prompt=${encodeURIComponent(template.template_prompt)}`;
+    window.location.href = url;
+  };
+
+  const getCategoryIcon = (category: string) => {
+    switch (category) {
+      case "Development": return Code;
+      case "Marketing": return Sparkles;
+      case "Documentation": return FileText;
+      case "Support": return MessageSquare;
+      case "Business": return Briefcase;
+      case "Creative": return Star;
+      default: return FileText;
+    }
   };
 
   return (
@@ -126,8 +137,20 @@ export default function Templates() {
               </div>
 
               <div className="flex flex-wrap gap-2">
+                <Badge 
+                  variant={selectedCategory === "" ? "default" : "outline"} 
+                  className="cursor-pointer hover:bg-accent"
+                  onClick={() => setSelectedCategory("")}
+                >
+                  All
+                </Badge>
                 {categories.map(category => (
-                  <Badge key={category} variant="outline" className="cursor-pointer hover:bg-accent">
+                  <Badge 
+                    key={category} 
+                    variant={selectedCategory === category ? "default" : "outline"} 
+                    className="cursor-pointer hover:bg-accent"
+                    onClick={() => setSelectedCategory(category)}
+                  >
                     {category}
                   </Badge>
                 ))}
@@ -135,59 +158,76 @@ export default function Templates() {
             </div>
 
             {/* Templates Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredTemplates.map((template) => {
-                const Icon = template.icon;
-                return (
-                  <Card key={template.id} className="group hover:shadow-glow-subtle transition-all duration-300 hover:scale-105">
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <Icon className="h-6 w-6 text-primary" />
-                        <Badge variant="secondary">{template.category}</Badge>
-                      </div>
-                      <CardTitle className="text-lg">{template.title}</CardTitle>
-                      <CardDescription>{template.description}</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        <div className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-md">
-                          {template.prompt}
-                        </div>
-                        
-                        <div className="flex flex-wrap gap-1">
-                          {template.tags.map(tag => (
-                            <Badge key={tag} variant="outline" className="text-xs">
-                              {tag}
-                            </Badge>
-                          ))}
-                        </div>
-
+            {loading ? (
+              <div className="text-center py-12">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                <p className="text-muted-foreground">Loading templates...</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredTemplates.map((template) => {
+                  const Icon = getCategoryIcon(template.category);
+                  return (
+                    <Card key={template.id} className="group hover:shadow-glow-subtle transition-all duration-300 hover:scale-105">
+                      <CardHeader>
                         <div className="flex items-center justify-between">
-                          <span className="text-sm text-muted-foreground">
-                            Used {template.usage} times
-                          </span>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => copyToClipboard(template.prompt)}
-                            className="hover:bg-accent"
-                          >
-                            <Copy className="h-4 w-4 mr-2" />
-                            Copy
-                          </Button>
+                          <Icon className="h-6 w-6 text-primary" />
+                          <Badge variant="secondary">{template.category}</Badge>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
+                        <CardTitle className="text-lg">{template.title}</CardTitle>
+                        <CardDescription>{template.description}</CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-4">
+                          <div className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-md">
+                            {template.template_prompt}
+                          </div>
+                          
+                          <div className="flex flex-wrap gap-1">
+                            {template.tags?.map((tag: string) => (
+                              <Badge key={tag} variant="outline" className="text-xs">
+                                {tag}
+                              </Badge>
+                            ))}
+                          </div>
 
-            {filteredTemplates.length === 0 && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-muted-foreground">
+                              Used {template.usage_count || 0} times
+                            </span>
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => copyToClipboard(template.template_prompt, template.id)}
+                                className="hover:bg-accent"
+                              >
+                                <Copy className="h-4 w-4 mr-2" />
+                                Copy
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="default"
+                                onClick={() => useTemplate(template)}
+                                className="hover:bg-primary/90"
+                              >
+                                Use
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+
+            {!loading && filteredTemplates.length === 0 && (
               <div className="text-center py-12">
                 <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                 <h3 className="text-lg font-semibold mb-2">No templates found</h3>
-                <p className="text-muted-foreground">Try adjusting your search terms</p>
+                <p className="text-muted-foreground">Try adjusting your search terms or category filter</p>
               </div>
             )}
           </div>
