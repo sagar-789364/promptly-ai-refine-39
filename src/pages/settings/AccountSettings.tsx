@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Header } from "@/components/Header";
 import { Sidebar } from "@/components/Sidebar";
 import { Button } from "@/components/ui/button";
@@ -11,24 +11,72 @@ import { Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, User, Save, Camera } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
+import { DatabaseService } from "@/lib/database";
 
 export default function AccountSettings() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [name, setName] = useState("John Doe");
-  const [email, setEmail] = useState("john.doe@example.com");
-  const [username, setUsername] = useState("johndoe");
-  const [phone, setPhone] = useState("+1 (555) 123-4567");
-  const [dateOfBirth, setDateOfBirth] = useState("1990-01-15");
-  const [profession, setProfession] = useState("Software Engineer");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [profession, setProfession] = useState("");
 
   const { toast } = useToast();
 
-  const handleSave = () => {
-    toast({
-      title: "Account Updated",
-      description: "Your account information has been saved successfully.",
-    });
+  useEffect(() => {
+    if (user) {
+      loadUserData();
+    }
+  }, [user]);
+
+  const loadUserData = async () => {
+    if (!user) return;
+    
+    try {
+      const { data: profile } = await DatabaseService.getUserSettings(user.id);
+      if (profile) {
+        setName(profile.display_name || '');
+        setProfession(profile.profession || '');
+      }
+      setEmail(user.email || '');
+    } catch (error) {
+      console.error('Failed to load user data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!user) return;
+    
+    setSaving(true);
+    try {
+      await DatabaseService.updateUserSettings(user.id, {
+        display_name: name,
+        profession: profession
+      });
+      
+      // Track settings update
+      await DatabaseService.trackEvent(user.id, 'profile_updated', {
+        fields_updated: ['display_name', 'profession']
+      });
+      
+      toast({
+        title: "Account Updated",
+        description: "Your account information has been saved successfully.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update account. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -75,26 +123,28 @@ export default function AccountSettings() {
                 </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="name">Full Name</Label>
-                        <Input
-                          id="name"
-                          value={name}
-                          onChange={(e) => setName(e.target.value)}
-                          className="bg-background border-input"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="username">Username</Label>
-                        <Input
-                          id="username"
-                          value={username}
-                          onChange={(e) => setUsername(e.target.value)}
-                          className="bg-background border-input"
-                        />
-                      </div>
+                        <div className="space-y-2">
+                         <Label htmlFor="name">Full Name</Label>
+                         <Input
+                           id="name"
+                           value={name}
+                           onChange={(e) => setName(e.target.value)}
+                           className="bg-background border-input"
+                           disabled={loading}
+                         />
+                       </div>
+                       <div className="space-y-2">
+                         <Label htmlFor="profession">Profession</Label>
+                         <Input
+                           id="profession"
+                           value={profession}
+                           onChange={(e) => setProfession(e.target.value)}
+                           className="bg-background border-input"
+                           placeholder="This becomes your default AI persona"
+                           disabled={loading}
+                         />
+                       </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
                        <div className="space-y-2">
                          <Label htmlFor="email">Email Address</Label>
                          <p className="text-sm text-muted-foreground">Email cannot be changed after account creation</p>
@@ -102,54 +152,19 @@ export default function AccountSettings() {
                            id="email"
                            type="email"
                            value={email}
-                           onChange={(e) => setEmail(e.target.value)}
                            disabled
                            className="bg-muted/50 text-muted-foreground cursor-not-allowed"
                          />
                        </div>
-                       <div className="space-y-2">
-                         <Label htmlFor="phone">Phone Number</Label>
-                         <p className="text-sm text-muted-foreground">Phone number cannot be changed after verification</p>
-                         <Input
-                           id="phone"
-                           value={phone}
-                           onChange={(e) => setPhone(e.target.value)}
-                           disabled
-                           className="bg-muted/50 text-muted-foreground cursor-not-allowed"
-                         />
-                       </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="dateOfBirth">Date of Birth</Label>
-                        <Input
-                          id="dateOfBirth"
-                          type="date"
-                          value={dateOfBirth}
-                          onChange={(e) => setDateOfBirth(e.target.value)}
-                          className="bg-background border-input"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="profession">Profession</Label>
-                        <Input
-                          id="profession"
-                          value={profession}
-                          onChange={(e) => setProfession(e.target.value)}
-                          className="bg-background border-input"
-                          placeholder="This becomes your default AI persona"
-                        />
-                      </div>
-                    </div>
                   </CardContent>
               </Card>
 
-              <div className="flex justify-end">
-                <Button onClick={handleSave} variant="ai" className="font-semibold px-8">
-                  <Save className="mr-2 h-4 w-4" />
-                  Save Changes
-                </Button>
-              </div>
+               <div className="flex justify-end">
+                 <Button onClick={handleSave} variant="ai" className="font-semibold px-8" disabled={saving || loading}>
+                   <Save className="mr-2 h-4 w-4" />
+                   {saving ? 'Saving...' : 'Save Changes'}
+                 </Button>
+               </div>
             </div>
 
             <div className="space-y-6">

@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Header } from "@/components/Header";
 import { Sidebar } from "@/components/Sidebar";
 import { Button } from "@/components/ui/button";
@@ -11,10 +11,15 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Palette, Save, Monitor, Sun, Moon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
+import { DatabaseService } from "@/lib/database";
 
 export default function AppearanceSettings() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [theme, setTheme] = useState("dark");
   const [fontSize, setFontSize] = useState("medium");
   const [animations, setAnimations] = useState(true);
@@ -22,11 +27,62 @@ export default function AppearanceSettings() {
 
   const { toast } = useToast();
 
-  const handleSave = () => {
-    toast({
-      title: "Appearance Updated",
-      description: "Your appearance preferences have been saved successfully.",
-    });
+  useEffect(() => {
+    if (user) {
+      loadUserSettings();
+    }
+  }, [user]);
+
+  const loadUserSettings = async () => {
+    if (!user) return;
+    
+    try {
+      const { data: profile } = await DatabaseService.getUserSettings(user.id);
+      if (profile) {
+        setTheme(profile.theme || 'dark');
+        setFontSize(profile.font_size || 'medium');
+        setAnimations(profile.animations_enabled ?? true);
+        setCompactMode(profile.compact_mode ?? false);
+      }
+    } catch (error) {
+      console.error('Failed to load user settings:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!user) return;
+    
+    setSaving(true);
+    try {
+      await DatabaseService.updateUserSettings(user.id, {
+        theme,
+        font_size: fontSize,
+        animations_enabled: animations,
+        compact_mode: compactMode
+      });
+      
+      await DatabaseService.trackEvent(user.id, 'appearance_settings_updated', {
+        theme,
+        font_size: fontSize,
+        animations_enabled: animations,
+        compact_mode: compactMode
+      });
+      
+      toast({
+        title: "Appearance Updated",
+        description: "Your appearance preferences have been saved successfully.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to save appearance settings. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -140,12 +196,12 @@ export default function AppearanceSettings() {
                 </CardContent>
               </Card>
 
-              <div className="flex justify-end">
-                <Button onClick={handleSave} variant="ai" className="font-semibold px-8">
-                  <Save className="mr-2 h-4 w-4" />
-                  Save Changes
-                </Button>
-              </div>
+               <div className="flex justify-end">
+                 <Button onClick={handleSave} variant="ai" className="font-semibold px-8" disabled={saving || loading}>
+                   <Save className="mr-2 h-4 w-4" />
+                   {saving ? 'Saving...' : 'Save Changes'}
+                 </Button>
+               </div>
             </div>
           </div>
         </main>

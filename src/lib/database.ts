@@ -208,6 +208,78 @@ export class DatabaseService {
     return { error };
   }
 
+  // User Settings Management
+  static async getUserSettings(userId: string) {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
+
+    return { data, error };
+  }
+
+  static async updateUserSettings(userId: string, settings: {
+    display_name?: string;
+    profession?: string;
+    theme?: string;
+    font_size?: string;
+    animations_enabled?: boolean;
+    compact_mode?: boolean;
+    default_model?: string;
+    default_tone?: string;
+    default_persona?: string;
+    default_format?: string;
+  }) {
+    const { data, error } = await supabase
+      .from('profiles')
+      .update(settings)
+      .eq('user_id', userId)
+      .select()
+      .single();
+
+    return { data, error };
+  }
+
+  // Enhanced Analytics
+  static async trackEvent(userId: string, eventType: string, metadata?: Record<string, any>) {
+    const { data, error } = await supabase
+      .from('usage_analytics')
+      .insert({
+        user_id: userId,
+        action_type: eventType,
+        metadata: metadata || {}
+      });
+
+    return { data, error };
+  }
+
+  static async getUserStats(userId: string) {
+    const [promptsResult, templatesResult, analyticsResult] = await Promise.all([
+      supabase
+        .from('prompts')
+        .select('id, created_at, is_saved, is_favorited')
+        .eq('user_id', userId),
+      
+      supabase
+        .from('prompt_templates')
+        .select('usage_count')
+        .eq('user_id', userId),
+      
+      supabase
+        .from('usage_analytics')
+        .select('action_type, created_at')
+        .eq('user_id', userId)
+        .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
+    ]);
+
+    return {
+      prompts: promptsResult.data || [],
+      templates: templatesResult.data || [],
+      analytics: analyticsResult.data || []
+    };
+  }
+
   // File Storage
   static async uploadFile(userId: string, file: File, path?: string) {
     const fileExt = file.name.split('.').pop();

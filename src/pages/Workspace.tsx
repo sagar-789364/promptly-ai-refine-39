@@ -197,8 +197,8 @@ export default function Workspace() {
     }
   };
 
-  const handleSendChatMessage = () => {
-    if (!chatInput.trim()) return;
+  const handleSendChatMessage = async () => {
+    if (!chatInput.trim() || !currentPromptId || !user) return;
 
     const userMessage = {
       id: Date.now(),
@@ -207,16 +207,39 @@ export default function Workspace() {
     };
 
     setChatMessages(prev => [...prev, userMessage]);
+    
+    // Save user message to database
+    try {
+      // Create chat session if needed
+      let sessionId = currentPromptId; // Use prompt ID as session ID for simplicity
+      await DatabaseService.addChatMessage(sessionId, 'user', chatInput);
+      
+      // Track user interaction
+      await DatabaseService.trackEvent(user.id, 'chat_message_sent', {
+        prompt_id: currentPromptId,
+        message_length: chatInput.length
+      });
+    } catch (error) {
+      console.error('Failed to save chat message:', error);
+    }
+
     setChatInput("");
 
     // Simulate AI response
-    setTimeout(() => {
+    setTimeout(async () => {
       const aiResponse = {
         id: Date.now() + 1,
         role: "assistant" as const,
         content: `I understand you want to refine: "${chatInput}". Here are some suggestions to improve your prompt:\n\n1. Add more specific context\n2. Define the desired output format\n3. Include examples if helpful\n\nWould you like me to help you implement any of these improvements?`,
       };
       setChatMessages(prev => [...prev, aiResponse]);
+
+      // Save AI response to database
+      try {
+        await DatabaseService.addChatMessage(currentPromptId!, 'assistant', aiResponse.content);
+      } catch (error) {
+        console.error('Failed to save AI response:', error);
+      }
     }, 1000);
   };
 
