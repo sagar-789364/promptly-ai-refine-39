@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,13 +7,48 @@ import { Badge } from "@/components/ui/badge";
 import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
+import { DatabaseService } from "@/lib/database";
+import { useToast } from "@/hooks/use-toast";
 import { Search, Bookmark, Trash2, Edit, Share, Calendar } from "lucide-react";
 
 export default function Saved() {
+  const { user } = useAuth();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [savedPrompts, setSavedPrompts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
 
-  const savedPrompts = [
+  useEffect(() => {
+    if (user) {
+      loadSavedPrompts();
+    }
+  }, [user]);
+
+  const loadSavedPrompts = async () => {
+    if (!user) return;
+    
+    try {
+      const { data, error } = await DatabaseService.getUserPrompts(user.id, { saved: true });
+      
+      if (error) {
+        throw new Error(error.message);
+      }
+      
+      setSavedPrompts(data || []);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to load saved prompts",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const mockSavedPrompts = [
     {
       id: 1,
       title: "Product Launch Strategy",
@@ -62,9 +97,9 @@ export default function Saved() {
   ];
 
   const filteredPrompts = savedPrompts.filter(prompt =>
-    prompt.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    prompt.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    prompt.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
+    (prompt.title && prompt.title.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    prompt.initial_prompt.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (prompt.refined_prompt && prompt.refined_prompt.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const formatDate = (dateString: string) => {
@@ -113,21 +148,29 @@ export default function Saved() {
             </div>
 
             {/* Saved Prompts List */}
-            <div className="space-y-4">
-              {filteredPrompts.map((prompt) => (
-                <Card key={prompt.id} className="group hover:shadow-glow-subtle transition-all duration-300">
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Bookmark className="h-4 w-4 text-primary fill-current" />
-                          <CardTitle className="text-lg">{prompt.title}</CardTitle>
-                          <Badge variant="outline">{prompt.category}</Badge>
+            {loading ? (
+              <div className="text-center py-12">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                <p className="text-muted-foreground">Loading saved prompts...</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {filteredPrompts.map((prompt) => (
+                  <Card key={prompt.id} className="group hover:shadow-glow-subtle transition-all duration-300">
+                    <CardHeader>
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Bookmark className="h-4 w-4 text-primary fill-current" />
+                            <CardTitle className="text-lg">
+                              {prompt.title || prompt.initial_prompt.substring(0, 50) + "..."}
+                            </CardTitle>
+                            <Badge variant="outline">{prompt.target_model || "General"}</Badge>
+                          </div>
+                          <CardDescription className="text-base">
+                            {prompt.refined_prompt || prompt.initial_prompt}
+                          </CardDescription>
                         </div>
-                        <CardDescription className="text-base">
-                          {prompt.content}
-                        </CardDescription>
-                      </div>
                       <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <Button size="sm" variant="ghost">
                           <Edit className="h-4 w-4" />
@@ -141,29 +184,35 @@ export default function Saved() {
                       </div>
                     </div>
                   </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center justify-between">
-                      <div className="flex flex-wrap gap-1">
-                        {prompt.tags.map(tag => (
-                          <Badge key={tag} variant="secondary" className="text-xs">
-                            {tag}
-                          </Badge>
-                        ))}
-                      </div>
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                        <div className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          Saved {formatDate(prompt.savedAt)}
+                    <CardContent>
+                      <div className="flex items-center justify-between">
+                        <div className="flex flex-wrap gap-1">
+                          {prompt.tone && (
+                            <Badge variant="secondary" className="text-xs">
+                              {prompt.tone}
+                            </Badge>
+                          )}
+                          {prompt.persona && (
+                            <Badge variant="secondary" className="text-xs">
+                              {prompt.persona}
+                            </Badge>
+                          )}
                         </div>
-                        <div>
-                          Last used {formatDate(prompt.lastUsed)}
+                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                          <div className="flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            Saved {formatDate(prompt.created_at)}
+                          </div>
+                          <div>
+                            Updated {formatDate(prompt.updated_at)}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
 
             {filteredPrompts.length === 0 && (
               <div className="text-center py-12">

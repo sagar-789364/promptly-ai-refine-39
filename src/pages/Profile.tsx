@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Header } from "@/components/Header";
 import { Sidebar } from "@/components/Sidebar";
 import { Button } from "@/components/ui/button";
@@ -12,17 +12,27 @@ import { Badge } from "@/components/ui/badge";
 import { User, Camera, Save, Crown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { authService } from "@/lib/auth";
 
 export default function Profile() {
+  const { user } = useAuth();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [name, setName] = useState("John Doe");
-  const [email, setEmail] = useState("john.doe@example.com");
-  const [dateOfBirth, setDateOfBirth] = useState("1990-01-15");
-  const [profession, setProfession] = useState("Software Engineer");
-  const [bio, setBio] = useState("AI enthusiast and prompt engineer with a passion for creating innovative solutions.");
+  const [displayName, setDisplayName] = useState("");
+  const [profession, setProfession] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState("");
+  const [loading, setLoading] = useState(false);
   const [userPlan] = useState("Pro");
 
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (user?.profile) {
+      setDisplayName(user.profile.display_name || "");
+      setProfession(user.profile.profession || "");
+      setAvatarUrl(user.profile.avatar_url || "");
+    }
+  }, [user]);
 
   const getPlanBadgeColor = () => {
     switch(userPlan) {
@@ -32,11 +42,30 @@ export default function Profile() {
     }
   };
 
-  const handleSave = () => {
-    toast({
-      title: "Profile Updated",
-      description: "Your profile information has been saved successfully.",
-    });
+  const handleSave = async () => {
+    if (!user) return;
+    
+    setLoading(true);
+    try {
+      await authService.updateProfile({
+        display_name: displayName,
+        profession: profession,
+        avatar_url: avatarUrl
+      });
+      
+      toast({
+        title: "Profile Updated",
+        description: "Your profile information has been saved successfully.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update profile. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -77,12 +106,13 @@ export default function Profile() {
                   <CardContent className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="name">Full Name</Label>
+                        <Label htmlFor="displayName">Display Name</Label>
                         <Input
-                          id="name"
-                          value={name}
-                          onChange={(e) => setName(e.target.value)}
+                          id="displayName"
+                          value={displayName}
+                          onChange={(e) => setDisplayName(e.target.value)}
                           className="bg-background border-input"
+                          placeholder="Enter your display name"
                         />
                       </div>
                       <div className="space-y-2">
@@ -90,51 +120,34 @@ export default function Profile() {
                         <Input
                           id="email"
                           type="email"
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                          className="bg-background border-input"
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="dateOfBirth">Date of Birth</Label>
-                        <Input
-                          id="dateOfBirth"
-                          type="date"
-                          value={dateOfBirth}
-                          onChange={(e) => setDateOfBirth(e.target.value)}
-                          className="bg-background border-input"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="profession">Profession</Label>
-                        <Input
-                          id="profession"
-                          value={profession}
-                          onChange={(e) => setProfession(e.target.value)}
-                          className="bg-background border-input"
-                          placeholder="e.g., Software Engineer, Marketing Manager"
+                          value={user?.email || ""}
+                          disabled
+                          className="bg-background border-input opacity-50"
                         />
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="bio">Bio</Label>
-                      <Textarea
-                        id="bio"
-                        value={bio}
-                        onChange={(e) => setBio(e.target.value)}
-                        className="min-h-24 bg-background border-input resize-none"
-                        placeholder="Tell us about yourself..."
+                      <Label htmlFor="profession">Profession</Label>
+                      <Input
+                        id="profession"
+                        value={profession}
+                        onChange={(e) => setProfession(e.target.value)}
+                        className="bg-background border-input"
+                        placeholder="e.g., Software Engineer, Marketing Manager"
                       />
                     </div>
                   </CardContent>
                 </Card>
 
                 <div className="flex justify-end">
-                  <Button onClick={handleSave} variant="ai" className="font-semibold px-8">
+                  <Button 
+                    onClick={handleSave} 
+                    variant="ai" 
+                    className="font-semibold px-8"
+                    disabled={loading}
+                  >
                     <Save className="mr-2 h-4 w-4" />
-                    Save Changes
+                    {loading ? "Saving..." : "Save Changes"}
                   </Button>
                 </div>
               </div>
@@ -146,9 +159,9 @@ export default function Profile() {
                   </CardHeader>
                   <CardContent className="flex flex-col items-center space-y-4">
                     <Avatar className="h-24 w-24">
-                      <AvatarImage src="/avatars/01.png" alt="User" />
+                      <AvatarImage src={avatarUrl || "/avatars/01.png"} alt="User" />
                       <AvatarFallback className="bg-gradient-to-br from-primary to-purple-600 text-white font-semibold text-2xl">
-                        JD
+                        {displayName ? displayName.split(' ').map(n => n[0]).join('').toUpperCase() : user?.email?.[0]?.toUpperCase() || 'U'}
                       </AvatarFallback>
                     </Avatar>
                     <Button variant="outline" size="sm">

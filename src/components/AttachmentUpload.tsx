@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Paperclip, X, FileText, Image, File } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { DatabaseService } from "@/lib/database";
 
 interface AttachmentFile {
   id: string;
@@ -11,6 +13,7 @@ interface AttachmentFile {
   type: string;
   size: number;
   file: File;
+  url?: string;
 }
 
 interface AttachmentUploadProps {
@@ -19,6 +22,7 @@ interface AttachmentUploadProps {
 }
 
 export function AttachmentUpload({ onAttachmentsChange, className }: AttachmentUploadProps) {
+  const { user } = useAuth();
   const [attachments, setAttachments] = useState<AttachmentFile[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
