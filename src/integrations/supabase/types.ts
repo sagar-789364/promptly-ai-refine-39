@@ -115,29 +115,41 @@ export type Database = {
       }
       profiles: {
         Row: {
+          animations_enabled: boolean | null
           avatar_url: string | null
+          compact_mode: boolean | null
           created_at: string
           display_name: string | null
+          font_size: string | null
           id: string
           profession: string | null
+          theme: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          animations_enabled?: boolean | null
           avatar_url?: string | null
+          compact_mode?: boolean | null
           created_at?: string
           display_name?: string | null
+          font_size?: string | null
           id?: string
           profession?: string | null
+          theme?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          animations_enabled?: boolean | null
           avatar_url?: string | null
+          compact_mode?: boolean | null
           created_at?: string
           display_name?: string | null
+          font_size?: string | null
           id?: string
           profession?: string | null
+          theme?: string | null
           updated_at?: string
           user_id?: string
         }
