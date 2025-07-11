@@ -43,7 +43,16 @@ export function AttachmentUpload({ onAttachmentsChange, className }: AttachmentU
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "Please log in to upload files",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const files = Array.from(event.target.files || []);
     const validTypes = [
       'text/plain',
@@ -60,14 +69,14 @@ export function AttachmentUpload({ onAttachmentsChange, className }: AttachmentU
 
     const newAttachments: AttachmentFile[] = [];
 
-    files.forEach(file => {
+    for (const file of files) {
       if (!validTypes.includes(file.type)) {
         toast({
           title: "Invalid file type",
           description: `${file.name} is not a supported file type`,
           variant: "destructive",
         });
-        return;
+        continue;
       }
 
       if (file.size > 10 * 1024 * 1024) { // 10MB limit
@@ -76,21 +85,52 @@ export function AttachmentUpload({ onAttachmentsChange, className }: AttachmentU
           description: `${file.name} exceeds the 10MB limit`,
           variant: "destructive",
         });
-        return;
+        continue;
       }
 
-      newAttachments.push({
-        id: Date.now() + Math.random().toString(),
-        name: file.name,
-        type: file.type,
-        size: file.size,
-        file: file
-      });
-    });
+      try {
+        // Upload file to Supabase storage
+        const uploadResult = await DatabaseService.uploadFile(user.id, file, 'workspace');
+        
+        if (uploadResult.error) {
+          throw new Error(uploadResult.error.message);
+        }
 
-    const updatedAttachments = [...attachments, ...newAttachments];
-    setAttachments(updatedAttachments);
-    onAttachmentsChange(updatedAttachments);
+        newAttachments.push({
+          id: Date.now() + Math.random().toString(),
+          name: file.name,
+          type: file.type,
+          size: file.size,
+          file: file,
+          url: uploadResult.data?.url
+        });
+
+        // Track file upload event
+        await DatabaseService.trackEvent(user.id, 'file_uploaded', {
+          file_name: file.name,
+          file_type: file.type,
+          file_size: file.size
+        });
+      } catch (error) {
+        console.error('Upload error:', error);
+        toast({
+          title: "Upload failed",
+          description: `Failed to upload ${file.name}`,
+          variant: "destructive",
+        });
+      }
+    }
+
+    if (newAttachments.length > 0) {
+      const updatedAttachments = [...attachments, ...newAttachments];
+      setAttachments(updatedAttachments);
+      onAttachmentsChange(updatedAttachments);
+
+      toast({
+        title: "Files uploaded",
+        description: `${newAttachments.length} file(s) uploaded successfully`,
+      });
+    }
 
     // Reset file input
     if (fileInputRef.current) {

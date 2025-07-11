@@ -55,6 +55,17 @@ export interface ChatMessage {
   created_at: string;
 }
 
+export interface PromptFeedback {
+  id: string;
+  prompt_id: string;
+  user_id: string;
+  rating: number;
+  feedback_text?: string;
+  is_helpful: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export class DatabaseService {
   // Prompts
   static async createPrompt(prompt: Omit<Prompt, 'id' | 'created_at' | 'updated_at'>) {
@@ -304,6 +315,142 @@ export class DatabaseService {
       .from('attachments')
       .remove([path]);
     
+    return { error };
+  }
+
+  // Attachments
+  static async createAttachment(promptId: string, file: File, userId: string) {
+    // First upload the file
+    const uploadResult = await this.uploadFile(userId, file, 'prompts');
+    if (uploadResult.error || !uploadResult.data) {
+      return { data: null, error: uploadResult.error };
+    }
+
+    // Then create the attachment record
+    const { data, error } = await supabase
+      .from('attachments')
+      .insert({
+        prompt_id: promptId,
+        file_name: file.name,
+        file_type: file.type,
+        file_size: file.size,
+        file_url: uploadResult.data.url
+      })
+      .select()
+      .single();
+
+    return { data, error };
+  }
+
+  static async getPromptAttachments(promptId: string) {
+    const { data, error } = await supabase
+      .from('attachments')
+      .select('*')
+      .eq('prompt_id', promptId)
+      .order('created_at', { ascending: true });
+
+    return { data, error };
+  }
+
+  static async deleteAttachment(id: string) {
+    // First get the attachment to get the file path
+    const { data: attachment, error: fetchError } = await supabase
+      .from('attachments')
+      .select('file_url')
+      .eq('id', id)
+      .single();
+
+    if (fetchError) return { error: fetchError };
+
+    // Extract path from URL and delete the file
+    if (attachment?.file_url) {
+      const urlParts = attachment.file_url.split('/');
+      const pathIndex = urlParts.findIndex(part => part === 'attachments');
+      if (pathIndex !== -1) {
+        const filePath = urlParts.slice(pathIndex + 1).join('/');
+        await this.deleteFile(filePath);
+      }
+    }
+
+    // Then delete the attachment record
+    const { error } = await supabase
+      .from('attachments')
+      .delete()
+      .eq('id', id);
+
+    return { error };
+  }
+
+  // Feedback & Reviews
+  static async createFeedback(promptId: string, userId: string, rating: number, feedbackText?: string, isHelpful = true) {
+    const { data, error } = await supabase
+      .from('prompt_feedback')
+      .insert({
+        prompt_id: promptId,
+        user_id: userId,
+        rating,
+        feedback_text: feedbackText,
+        is_helpful: isHelpful
+      })
+      .select()
+      .single();
+
+    return { data, error };
+  }
+
+  static async getPromptFeedback(promptId: string) {
+    const { data, error } = await supabase
+      .from('prompt_feedback')
+      .select('*')
+      .eq('prompt_id', promptId)
+      .order('created_at', { ascending: false });
+
+    return { data, error };
+  }
+
+  static async updateFeedback(id: string, updates: Partial<PromptFeedback>) {
+    const { data, error } = await supabase
+      .from('prompt_feedback')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+
+    return { data, error };
+  }
+
+  static async deleteFeedback(id: string) {
+    const { error } = await supabase
+      .from('prompt_feedback')
+      .delete()
+      .eq('id', id);
+
+    return { error };
+  }
+
+  // Chat Session Management
+  static async getUserChatSessions(userId: string) {
+    const { data, error } = await supabase
+      .from('chat_sessions')
+      .select(`
+        *,
+        prompts (
+          title,
+          initial_prompt
+        )
+      `)
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    return { data, error };
+  }
+
+  static async deleteChatSession(id: string) {
+    const { error } = await supabase
+      .from('chat_sessions')
+      .delete()
+      .eq('id', id);
+
     return { error };
   }
 }

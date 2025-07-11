@@ -51,6 +51,7 @@ export default function Workspace() {
   const [chatInput, setChatInput] = useState("");
   const [isRefining, setIsRefining] = useState(false);
   const [currentPromptId, setCurrentPromptId] = useState<string | null>(null);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   
   // Check for prompt parameter in URL
@@ -67,6 +68,27 @@ export default function Workspace() {
   const [tone, setTone] = useState("");
   const [persona, setPersona] = useState("");
   const [outputFormat, setOutputFormat] = useState("");
+
+  // Load user default values
+  useEffect(() => {
+    const loadUserDefaults = async () => {
+      if (!user) return;
+      
+      try {
+        const { data: profile } = await DatabaseService.getUserSettings(user.id);
+        if (profile) {
+          setTargetModel(profile.default_model || "");
+          setTone(profile.default_tone || "");
+          setPersona(profile.default_persona || "");
+          setOutputFormat(profile.default_format || "");
+        }
+      } catch (error) {
+        console.error('Failed to load user defaults:', error);
+      }
+    };
+
+    loadUserDefaults();
+  }, [user]);
 
   const { toast } = useToast();
 
@@ -197,6 +219,36 @@ export default function Workspace() {
     }
   };
 
+  const handleFeedback = async (isHelpful: boolean) => {
+    if (!currentPromptId || !user) return;
+
+    try {
+      await DatabaseService.createFeedback(
+        currentPromptId,
+        user.id,
+        isHelpful ? 5 : 1,
+        undefined,
+        isHelpful
+      );
+
+      await DatabaseService.trackEvent(user.id, 'prompt_feedback', {
+        prompt_id: currentPromptId,
+        feedback_type: isHelpful ? 'positive' : 'negative'
+      });
+
+      toast({
+        title: "Feedback Recorded",
+        description: `Thank you for your ${isHelpful ? 'positive' : 'constructive'} feedback!`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to record feedback",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleSendChatMessage = async () => {
     if (!chatInput.trim() || !currentPromptId || !user) return;
 
@@ -211,14 +263,24 @@ export default function Workspace() {
     // Save user message to database
     try {
       // Create chat session if needed
-      let sessionId = currentPromptId; // Use prompt ID as session ID for simplicity
-      await DatabaseService.addChatMessage(sessionId, 'user', chatInput);
+      if (!currentSessionId && currentPromptId) {
+        const sessionResult = await DatabaseService.createChatSession(currentPromptId, user.id);
+        if (sessionResult.data) {
+          setCurrentSessionId(sessionResult.data.id);
+        }
+      }
       
-      // Track user interaction
-      await DatabaseService.trackEvent(user.id, 'chat_message_sent', {
-        prompt_id: currentPromptId,
-        message_length: chatInput.length
-      });
+      const sessionId = currentSessionId || currentPromptId;
+      if (sessionId) {
+        await DatabaseService.addChatMessage(sessionId, 'user', chatInput);
+        
+        // Track user interaction
+        await DatabaseService.trackEvent(user.id, 'chat_message_sent', {
+          prompt_id: currentPromptId,
+          session_id: sessionId,
+          message_length: chatInput.length
+        });
+      }
     } catch (error) {
       console.error('Failed to save chat message:', error);
     }
@@ -236,7 +298,10 @@ export default function Workspace() {
 
       // Save AI response to database
       try {
-        await DatabaseService.addChatMessage(currentPromptId!, 'assistant', aiResponse.content);
+        const sessionId = currentSessionId || currentPromptId;
+        if (sessionId) {
+          await DatabaseService.addChatMessage(sessionId, 'assistant', aiResponse.content);
+        }
       } catch (error) {
         console.error('Failed to save AI response:', error);
       }
@@ -522,10 +587,18 @@ export default function Workspace() {
                             <Save className="mr-2 h-4 w-4" />
                             Save
                           </Button>
-                          <Button variant="outline" size="sm">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleFeedback(true)}
+                          >
                             <ThumbsUp className="mr-1 h-4 w-4" />
                           </Button>
-                          <Button variant="outline" size="sm">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleFeedback(false)}
+                          >
                             <ThumbsDown className="mr-1 h-4 w-4" />
                           </Button>
                           <Button variant="ai" size="sm">

@@ -119,6 +119,10 @@ export type Database = {
           avatar_url: string | null
           compact_mode: boolean | null
           created_at: string
+          default_format: string | null
+          default_model: string | null
+          default_persona: string | null
+          default_tone: string | null
           display_name: string | null
           font_size: string | null
           id: string
@@ -132,6 +136,10 @@ export type Database = {
           avatar_url?: string | null
           compact_mode?: boolean | null
           created_at?: string
+          default_format?: string | null
+          default_model?: string | null
+          default_persona?: string | null
+          default_tone?: string | null
           display_name?: string | null
           font_size?: string | null
           id?: string
@@ -145,6 +153,10 @@ export type Database = {
           avatar_url?: string | null
           compact_mode?: boolean | null
           created_at?: string
+          default_format?: string | null
+          default_model?: string | null
+          default_persona?: string | null
+          default_tone?: string | null
           display_name?: string | null
           font_size?: string | null
           id?: string
@@ -154,6 +166,47 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      prompt_feedback: {
+        Row: {
+          created_at: string | null
+          feedback_text: string | null
+          id: string
+          is_helpful: boolean | null
+          prompt_id: string
+          rating: number | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          feedback_text?: string | null
+          id?: string
+          is_helpful?: boolean | null
+          prompt_id: string
+          rating?: number | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          feedback_text?: string | null
+          id?: string
+          is_helpful?: boolean | null
+          prompt_id?: string
+          rating?: number | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prompt_feedback_prompt_id_fkey"
+            columns: ["prompt_id"]
+            isOneToOne: false
+            referencedRelation: "prompts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       prompt_templates: {
         Row: {
